@@ -1,0 +1,7 @@
+project: rnshah9/chafa
+target: chafa
+tests: null
+
+cmds:
+  - cmd: /repo/tools/chafa/.libs/chafa @@
+    filepath: /test.png
