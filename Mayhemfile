@@ -1,6 +1,8 @@
 project: rnshah9/chafa
 target: chafa
-tests: null
+tests: 
+  - file://test.png
+image: ghcr.io/rnshah9/playground:chafa
 
 cmds:
   - cmd: /repo/tools/chafa/.libs/chafa @@
