@@ -1,8 +1,8 @@
-project: rnshah9/chafa
+project: chafa
 target: chafa
-tests: 
+testsuite: 
   - file://test.png
 
 cmds:
-  - cmd: /repo/tools/chafa/.libs/chafa @@
+  - cmd: /repo/tools/chafa/.libs/chafa /test.png
     filepath: /test.png
