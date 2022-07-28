@@ -1,8 +1,7 @@
 project: chafa
 target: chafa
 testsuite: 
-  - file://test.png
+  - file:/@@
 
 cmds:
-  - cmd: /repo/tools/chafa/.libs/chafa /test.png
-    filepath: /test.png
+  - cmd: /install/bin/chafa @@
