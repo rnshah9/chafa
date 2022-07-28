@@ -1,7 +1,7 @@
 project: chafa
 target: chafa
 testsuite: 
-  - file:/@@
+  - file://test.png
 
 cmds:
   - cmd: /install/bin/chafa @@
