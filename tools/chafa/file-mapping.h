@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 
-/* Copyright (C) 2019-2021 Hans Petter Jansson
+/* Copyright (C) 2019-2022 Hans Petter Jansson
  *
  * This file is part of Chafa, a program that turns images into character art.
  *
@@ -29,10 +29,12 @@ typedef struct FileMapping FileMapping;
 FileMapping *file_mapping_new (const gchar *path);
 void file_mapping_destroy (FileMapping *file_mapping);
 
+gboolean file_mapping_open_now (FileMapping *file_mapping, GError **error);
+
 const gchar *file_mapping_get_path (FileMapping *file_mapping);
 
 gboolean file_mapping_taste (FileMapping *file_mapping, gpointer out, goffset ofs, gsize length);
-gssize file_mapping_read (FileMapping *file_mapping, gpointer out, goffset ofs, gssize length);
+gssize file_mapping_read (FileMapping *file_mapping, gpointer out, goffset ofs, gsize length);
 gconstpointer file_mapping_get_data (FileMapping *file_mapping, gsize *length_out);
 
 gboolean file_mapping_has_magic (FileMapping *file_mapping, goffset ofs,

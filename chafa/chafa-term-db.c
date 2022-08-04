@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 
-/* Copyright (C) 2020-2021 Hans Petter Jansson
+/* Copyright (C) 2020-2022 Hans Petter Jansson
  *
  * This file is part of Chafa, a program that turns images into character art.
  *
@@ -44,7 +44,7 @@ struct ChafaTermDb
 typedef struct
 {
     ChafaTermSeq seq;
-    gchar *str;
+    const gchar *str;
 }
 SeqStr;
 
@@ -54,7 +54,7 @@ static const SeqStr vt220_seqs [] =
     { CHAFA_TERM_SEQ_RESET_TERMINAL_HARD, "\033c" },
     { CHAFA_TERM_SEQ_RESET_ATTRIBUTES, "\033[0m" },
     { CHAFA_TERM_SEQ_CLEAR, "\033[2J" },
-    { CHAFA_TERM_SEQ_BOLD, "\033[1m" },
+    { CHAFA_TERM_SEQ_ENABLE_BOLD, "\033[1m" },
     { CHAFA_TERM_SEQ_INVERT_COLORS, "\033[7m" },
     { CHAFA_TERM_SEQ_CURSOR_TO_TOP_LEFT, "\033[0H" },
     { CHAFA_TERM_SEQ_CURSOR_TO_BOTTOM_LEFT, "\033[9999;1H" },
@@ -253,6 +253,7 @@ detect_capabilities (ChafaTermInfo *ti, gchar **envp)
     const gchar *tmux;
     const gchar *ctx_backend;
     const gchar *lc_terminal;
+    gchar *comspec = NULL;
     const SeqStr **color_seq_list = color_256_list;
     const SeqStr *gfx_seqs = NULL;
     const SeqStr *rep_seqs_local = NULL;
@@ -285,6 +286,19 @@ detect_capabilities (ChafaTermInfo *ti, gchar **envp)
 
     lc_terminal = g_environ_getenv (envp, "LC_TERMINAL");
     if (!lc_terminal) lc_terminal = "";
+
+    /* The MS Windows 10 TH2 (v1511+) console supports ANSI escape codes,
+     * including AIX and DirectColor sequences. We detect this early and allow
+     * TERM to override, if present. */
+    comspec = (gchar *) g_environ_getenv (envp, "ComSpec");
+    if (comspec)
+    {
+        comspec = g_ascii_strdown (comspec, -1);
+        if (g_str_has_suffix (comspec, "\\cmd.exe"))
+            color_seq_list = color_direct_list;
+        g_free (comspec);
+        comspec = NULL;
+    }
 
     /* Some terminals set COLORTERM=truecolor. However, this env var can
      * make its way into environments where truecolor is not desired

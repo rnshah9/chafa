@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 
-/* Copyright (C) 2021 Hans Petter Jansson
+/* Copyright (C) 2021-2022 Hans Petter Jansson
  *
  * This file is part of Chafa, a program that turns images into character art.
  *
@@ -169,6 +169,8 @@ chafa_iterm2_canvas_draw_all_pixels (ChafaIterm2Canvas *iterm2_canvas, ChafaPixe
                            iterm2_canvas->height,
                            chafa_get_n_actual_threads (),
                            1);
+
+    smol_scale_destroy (ctx.scale_ctx);
 }
 
 static void

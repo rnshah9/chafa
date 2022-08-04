@@ -5,7 +5,7 @@ dnl ----------------------------
 dnl --- Package configuration ---
 
 m4_define([chafa_major_version], [1])
-m4_define([chafa_minor_version], [11])
+m4_define([chafa_minor_version], [13])
 m4_define([chafa_micro_version], [0])
 
 m4_define([chafa_version], [chafa_major_version.chafa_minor_version.chafa_micro_version])
@@ -36,7 +36,11 @@ AC_DEFINE_UNQUOTED(CHAFA_VERSION, "$CHAFA_VERSION", [Package version string])
 
 dnl --- Standard setup ---
 
-BASE_CFLAGS="-Wall -Wextra -Wmissing-prototypes"
+BASE_CFLAGS="-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_26 \
+-Wall -Wextra -Wmissing-prototypes -Wwrite-strings -Wunused-macros -Wundef \
+-Wpointer-arith -Werror=format-security"
+
+# May want to look into -Wconversion sometime. For now, it's just too much noise.
 
 AC_USE_SYSTEM_EXTENSIONS
 AM_SANITY_CHECK
@@ -44,11 +48,17 @@ AM_MAINTAINER_MODE
 
 AC_C_CONST
 AC_PROG_CC
-AC_PROG_CC_C99
 AC_PROG_CPP
 AC_PROG_INSTALL
 AM_PROG_AR
-LT_INIT
+LT_INIT([win32-dll])
+
+dnl --- Check for extra compiler warnings ---
+
+AX_CHECK_COMPILE_FLAG([-Wstack-usage=131072],[BASE_CFLAGS="$BASE_CFLAGS -Wstack-usage=131072"],,[-Werror])
+AX_CHECK_COMPILE_FLAG([-Wfor-loop-analysis],[BASE_CFLAGS="$BASE_CFLAGS -Wfor-loop-analysis"],,[-Werror])
+AX_CHECK_COMPILE_FLAG([-Wlogical-op],[BASE_CFLAGS="$BASE_CFLAGS -Wlogical-op"],,[-Werror])
+AX_CHECK_COMPILE_FLAG([-Wlogical-op-parentheses],[BASE_CFLAGS="$BASE_CFLAGS -Wlogical-op-parentheses"],,[-Werror])
 
 dnl --- Required standards ---
 
@@ -74,7 +84,7 @@ dnl AC_DEFINE([_POSIX_C_SOURCE], [200809L], [Minimum POSIX standard we need])
 
 dnl --- Dependency check ---
 
-PKG_CHECK_MODULES(GLIB, glib-2.0 >= 2.10)
+PKG_CHECK_MODULES(GLIB, glib-2.0 >= 2.26)
 
 AC_ARG_WITH(tools,
   [AS_HELP_STRING([--without-tools], [don't build command-line tools [default=on]])],
@@ -214,7 +224,8 @@ AS_IF([ test "$enable_man" != no ], [
 
 dnl --- Specific checks ---
 
-AC_CHECK_FUNCS(mmap getrandom)
+AC_CHECK_FUNCS(ctermid getrandom mmap sigaction)
+AC_CHECK_HEADERS(sys/ioctl.h termios.h windows.h)
 
 dnl
 dnl Check for -Bsymbolic-functions linker flag used to avoid
@@ -350,7 +361,7 @@ case "$host" in
     dnl On mingw32 we do -fvisibility=hidden and __declspec(dllexport)
     AC_DEFINE([_CHAFA_EXTERN], [__attribute__((visibility("default"))) __declspec(dllexport) extern],
               [Defines how to decorate public symbols while building])
-    CFLAGS="${CFLAGS} -fvisibility=hidden"
+    CHAFA_VISIBILITY_CFLAGS="-fvisibility=hidden"
     ;;
   *)
     dnl On other compilers, check if we can do -fvisibility=hidden
@@ -364,7 +375,7 @@ case "$host" in
 
     AS_IF([test "${enable_fvisibility_hidden}" = "yes"], [
       AC_DEFINE([_CHAFA_EXTERN], [__attribute__((visibility("default"))) extern],
-                [defines how to decorate public symbols while building])
+                [Defines how to decorate public symbols while building])
       CHAFA_VISIBILITY_CFLAGS="-fvisibility=hidden"
     ])
     ;;
@@ -456,13 +467,23 @@ LODEPNG_FEATURES="\
 -DLODEPNG_NO_COMPILE_CPP \
 -DLODEPNG_NO_COMPILE_CRC"
 
+LODEPNG_CFLAGS="$BASE_CFLAGS $LODEPNG_FEATURES"
+LODEPNG_LDFLAGS="$CHAFA_BDYNAMIC_FLAGS"
+
+LIBNSGIF_CFLAGS="$BASE_CFLAGS"
+LIBNSGIF_LDFLAGS="$CHAFA_BDYNAMIC_FLAGS"
+
 LIBCHAFA_CFLAGS="$BASE_CFLAGS $CHAFA_VISIBILITY_CFLAGS"
 LIBCHAFA_LDFLAGS="$CHAFA_BDYNAMIC_FLAGS"
 
 CHAFA_CFLAGS="$BASE_CFLAGS $CHAFA_VISIBILITY_CFLAGS $LODEPNG_FEATURES"
 CHAFA_LDFLAGS="$CHAFA_BDYNAMIC_FLAGS"
 
-AC_SUBST(LODEPNG_FEATURES)
+AC_SUBST(LODEPNG_CFLAGS)
+AC_SUBST(LODEPNG_LDFLAGS)
+
+AC_SUBST(LIBNSGIF_CFLAGS)
+AC_SUBST(LIBNSGIF_LDFLAGS)
 
 AC_SUBST(LIBCHAFA_CFLAGS)
 AC_SUBST(LIBCHAFA_LDFLAGS)
@@ -489,6 +510,9 @@ AC_CONFIG_FILES([Makefile
                  docs/Makefile
                  docs/version.xml
                  tests/Makefile
+                 tests/data/Makefile
+                 tests/data/bad/Makefile
+                 tests/data/good/Makefile
                  tools/Makefile
                  tools/chafa/Makefile
                  tools/fontgen/Makefile])

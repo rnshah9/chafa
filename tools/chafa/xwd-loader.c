@@ -213,6 +213,7 @@ load_header (XwdLoader *loader)
 
     ASSERT_HEADER (h->header_size >= sizeof (XwdHeader));
     ASSERT_HEADER (h->header_size <= 65535);
+    ASSERT_HEADER (h->header_size % 4 == 0);  /* For image data alignment */
     ASSERT_HEADER (h->file_version == 7);
     ASSERT_HEADER (h->pixmap_depth == 24);
 
@@ -234,6 +235,9 @@ load_header (XwdLoader *loader)
      * something ridiculous. */
     ASSERT_HEADER (h->bytes_per_line >= h->pixmap_width * (h->bits_per_pixel / 8));
     ASSERT_HEADER (h->bytes_per_line <= h->pixmap_width * (h->bits_per_pixel / 8) + 1024);
+
+    /* If each pixel is four bytes, reject unaligned rowstrides */
+    ASSERT_HEADER (h->bits_per_pixel != 32 || h->bytes_per_line % 4 == 0);
 
     /* Make sure the total allocation/map is not too big. */
     ASSERT_HEADER (h->bytes_per_line * h->pixmap_height < (1UL << 31) - 65536 - 256 * 32);

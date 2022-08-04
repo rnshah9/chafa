@@ -139,7 +139,11 @@ static size_t lodepng_strlen(const char* a) {
 }
 
 #define LODEPNG_MAX(a, b) (((a) > (b)) ? (a) : (b))
-#define LODEPNG_MIN(a, b) (((a) < (b)) ? (a) : (b))
+
+#ifdef LODEPNG_COMPILE_ENCODER
+# define LODEPNG_MIN(a, b) (((a) < (b)) ? (a) : (b))
+#endif
+
 #define LODEPNG_ABS(x) ((x) < 0 ? -(x) : (x))
 
 #if defined(LODEPNG_COMPILE_PNG) || defined(LODEPNG_COMPILE_DECODER)
@@ -1367,8 +1371,11 @@ static unsigned inflateNoCompression(ucvector* out, LodePNGBitReader* reader,
   /*read the literal data: LEN bytes are now stored in the out buffer*/
   if(bytepos + LEN > size) return 23; /*error: reading outside of in buffer*/
 
-  lodepng_memcpy(out->data + out->size - LEN, reader->data + bytepos, LEN);
-  bytepos += LEN;
+  /*out->data can be NULL (when LEN is zero), and arithmetics on NULL ptr is undefined. so we check*/
+  if (out->data) {
+    lodepng_memcpy(out->data + out->size - LEN, reader->data + bytepos, LEN);
+    bytepos += LEN;
+  }
 
   reader->bp = bytepos << 3u;
 
@@ -2489,17 +2496,17 @@ const unsigned char* lodepng_chunk_data_const(const unsigned char* chunk) {
   return &chunk[8];
 }
 
-unsigned lodepng_chunk_check_crc(const unsigned char* chunk) {
 #ifndef LODEPNG_NO_COMPILE_CRC
+unsigned lodepng_chunk_check_crc(const unsigned char* chunk) {
   unsigned length = lodepng_chunk_length(chunk);
   unsigned CRC = lodepng_read32bitInt(&chunk[length + 8]);
   /*the CRC is taken of the data and the 4 chunk type letters, not the length*/
   unsigned checksum = lodepng_crc32(&chunk[4], length + 4);
   if(CRC != checksum) return 1;
   else
-#endif
   return 0;
 }
+#endif
 
 void lodepng_chunk_generate_crc(unsigned char* chunk) {
   unsigned length = lodepng_chunk_length(chunk);
@@ -4780,7 +4787,9 @@ unsigned lodepng_inspect_chunk(LodePNGState* state, size_t pos,
   }
 
   if(!error && !unhandled && !state->decoder.ignore_crc) {
+#ifndef LODEPNG_NO_COMPILE_CRC
     if(lodepng_chunk_check_crc(chunk)) return 57; /*invalid CRC*/
+#endif
   }
 
   return error;
@@ -4935,7 +4944,9 @@ static void decodeGeneric(unsigned char** out, unsigned* w, unsigned* h,
     }
 
     if(!state->decoder.ignore_crc && !unknown) /*check CRC if wanted, only on known chunk types*/ {
+#ifndef LODEPNG_NO_COMPILE_CRC
       if(lodepng_chunk_check_crc(chunk)) CERROR_BREAK(state->error, 57); /*invalid CRC*/
+#endif
     }
 
     if(!IEND) chunk = lodepng_chunk_next_const(chunk, in + insize);
@@ -4964,16 +4975,30 @@ static void decodeGeneric(unsigned char** out, unsigned* w, unsigned* h,
       expected_size += lodepng_get_raw_size_idat((*w + 0), (*h + 0) >> 1, bpp);
     }
 
+    if(expected_size > LODEPNG_IMAGE_DATA_SIZE_MAX) {
+      state->error = 114;
+    }
+  }
+
+  if (!state->error) {
     state->error = zlib_decompress(&scanlines, &scanlines_size, expected_size, idat, idatsize, &state->decoder.zlibsettings);
   }
+
   if(!state->error && scanlines_size != expected_size) state->error = 91; /*decompressed size doesn't match prediction*/
   lodepng_free(idat);
 
   if(!state->error) {
     outsize = lodepng_get_raw_size(*w, *h, &state->info_png.color);
+    if (outsize > LODEPNG_IMAGE_DATA_SIZE_MAX) {
+      state->error = 114;
+    }
+  }
+
+  if(!state->error) {
     *out = (unsigned char*)lodepng_malloc(outsize);
     if(!*out) state->error = 83; /*alloc fail*/
   }
+
   if(!state->error) {
     lodepng_memset(*out, 0, outsize);
     state->error = postProcessScanlines(*out, scanlines, *w, *h, &state->info_png);
@@ -6291,6 +6316,8 @@ const char* lodepng_error_text(unsigned code) {
     /*max ICC size limit can be configured in LodePNGDecoderSettings. This error prevents
     unreasonable memory consumption when decoding due to impossibly large ICC profile*/
     case 113: return "ICC profile unreasonably large";
+    /*max size of an in-memory image buffer*/
+    case 114: return "image data unreasonably large";
   }
   return "unknown error code";
 }

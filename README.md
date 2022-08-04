@@ -11,7 +11,7 @@
 <a href="https://travis-ci.com/hpjansson/chafa/branches" rel="nofollow">
 <img src="https://img.shields.io/travis/com/hpjansson/chafa/master.svg?label=master&style=for-the-badge" alt="Master Build Status" />
 &emsp;
-<img src="https://img.shields.io/travis/com/hpjansson/chafa/1.10.svg?label=1.10&style=for-the-badge" alt="1.10 Build Status" />
+<img src="https://img.shields.io/travis/com/hpjansson/chafa/1.12.svg?label=1.12&style=for-the-badge" alt="1.12 Build Status" />
 </a>
 &emsp;
 <a href="https://hpjansson.org/chafa/download/">
@@ -51,8 +51,9 @@ you want to build the command-line tool `chafa` and not just the library,
 you will additionally need development packages for:
 
 * FreeType2. Often packaged as `libfreetype6-dev` or `freetype2-devel`.
-* ImageMagick. Look for `libmagickwand-dev` or `ImageMagick-devel`.
 * libjpeg (optional). Look for `libjpeg-dev`, `libjpeg62-devel` or `libjpeg8-devel`.
+* librsvg (optional). Look for `librsvg2-dev` or `librsvg-devel`.
+* libtiff (optional). Look for `libtiff5-dev` or `libtiff-devel`.
 * libwebp (optional). Look for `libwebp-dev` or `libwebp-devel`.
 
 If you want to build documentation, you will also need gtk-doc.

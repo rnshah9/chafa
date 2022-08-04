@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 
-/* Copyright (C) 2019-2021 Hans Petter Jansson
+/* Copyright (C) 2019-2022 Hans Petter Jansson
  *
  * This file is part of Chafa, a program that turns images into character art.
  *
@@ -36,6 +36,8 @@
 # include <sys/random.h>
 #endif
 
+#include <glib/gstdio.h>
+
 #include "file-mapping.h"
 
 #ifdef HAVE_MMAP
@@ -45,11 +47,24 @@
 # endif
 #endif
 
+/* MS Windows needs files to be explicitly opened as O_BINARY. However, this
+ * flag is not always defined in our cross builds. */
+#ifndef O_BINARY
+# ifdef _O_BINARY
+# define O_BINARY _O_BINARY
+# else
+# define O_BINARY 0
+# endif
+#endif
+
 /* Streams bigger than this must be cached in a file */
 #define FILE_MEMORY_CACHE_MAX (4 * 1024 * 1024)
 
 /* Size of buffer used for copying stdin to file */
 #define COPY_BUFFER_SIZE 8192
+
+/* A contiguous magic string can't be longer than this */
+#define MAGIC_LENGTH_MAX 1024
 
 struct FileMapping
 {
@@ -60,6 +75,14 @@ struct FileMapping
     guint failed : 1;
     guint is_mmapped : 1;
 };
+
+static gboolean
+file_is_stdin (FileMapping *file_mapping)
+{
+    return file_mapping->path
+        && file_mapping->path [0] == '-'
+        && file_mapping->path [1] == '\0' ? TRUE : FALSE;
+ }
 
 static gsize
 safe_read (gint fd, void *buf, gsize len)
@@ -108,7 +131,9 @@ safe_read (gint fd, void *buf, gsize len)
            ntotal += (unsigned int)/*SAFE*/iread;
        }
        else
+       {
            return ntotal;
+       }
    }
 
    return ntotal; /* len == 0 */
@@ -117,7 +142,6 @@ safe_read (gint fd, void *buf, gsize len)
 static gboolean
 safe_write (gint fd, gconstpointer buf, gsize len)
 {
-    gsize ntotal = 0;
     const guint8 *buffer = buf;
     gboolean success = FALSE;
 
@@ -148,7 +172,6 @@ safe_write (gint fd, gconstpointer buf, gsize len)
            /* Continue writing until permanent failure or entire buffer written */
            buffer += n_written;
            len -= (unsigned int) n_written;
-           ntotal += (unsigned int) n_written;
        }
     }
 
@@ -187,7 +210,7 @@ free_file_data (FileMapping *file_mapping)
     }
 
     if (file_mapping->fd >= 0)
-        close (file_mapping->fd);
+        g_close (file_mapping->fd, NULL);
 
     file_mapping->fd = -1;
     file_mapping->data = NULL;
@@ -199,13 +222,14 @@ get_random_u64 (void)
 {
     guint64 u64 = 0;
     guint32 *u32p = (guint32 *) &u64;
+    gint len = 0;
     GTimeVal tv;
 
 #ifdef HAVE_GETRANDOM
-    getrandom ((void *) &u64, sizeof (guint64), GRND_NONBLOCK);
+    len = getrandom ((void *) &u64, sizeof (guint64), GRND_NONBLOCK);
 #endif
 
-    if (!u64)
+    if (!u64 || len < (gint) sizeof (guint64))
     {
         gpointer p;
 
@@ -243,9 +267,12 @@ open_temp_file_in_path (const gchar *base_path)
                                   get_random_u64 ());
 
     /* Create the file and unlink it, so it goes away when we exit */
-    fd = open (cache_path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    fd = g_open (cache_path, O_CREAT | O_RDWR | O_BINARY, S_IRUSR | S_IWUSR);
     if (fd >= 0)
-        unlink (cache_path);
+    {
+        /* You can't unlink an open file on MS Windows, so this will fail there */
+        g_unlink (cache_path);
+    }
 
     g_free (cache_path);
 
@@ -265,7 +292,7 @@ open_temp_file (void)
 }
 
 static gint
-cache_stdin (FileMapping *file_mapping)
+cache_stdin (FileMapping *file_mapping, GError **error)
 {
     gpointer buf = NULL;
     gint stdin_fd = fileno (stdin);  /* Can't use STDIN_FILENO on Windows */
@@ -313,24 +340,53 @@ out:
     if (!success)
     {
         if (cache_fd >= 0)
-            close (cache_fd);
+            g_close (cache_fd, NULL);
         cache_fd = -1;
         g_free (buf);
+
+        if (error && !*error)
+        {
+            g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
+                         "Could not cache input stream");
+        }
     }
 
     return cache_fd;
 }
 
 static gint
-open_file (FileMapping *file_mapping)
+open_file (FileMapping *file_mapping, GError **error)
 {
-    if (file_mapping->path [0] == '-'
-        && file_mapping->path [1] == '\0')
+    gint fd;
+
+    if (file_is_stdin (file_mapping))
     {
-        return cache_stdin (file_mapping);
+        fd = cache_stdin (file_mapping, error);
+    }
+    else
+    {
+        fd = g_open (file_mapping->path, O_RDONLY | O_BINARY, S_IRUSR | S_IWUSR);
+        if (fd < 0)
+        {
+            g_set_error (error, G_FILE_ERROR, g_file_error_from_errno (errno),
+                         "%s", strerror (errno));
+        }
     }
 
-    return open (file_mapping->path, O_RDONLY);
+    return fd;
+}
+
+static gboolean
+ensure_open_file (FileMapping *file_mapping)
+{
+    if (file_mapping->data || file_mapping->fd >= 0)
+        return TRUE;
+
+    file_mapping->fd = open_file (file_mapping, NULL);
+    if (file_mapping->data || file_mapping->fd >= 0)
+        return TRUE;
+
+    return FALSE;
 }
 
 static guint8 *
@@ -384,7 +440,7 @@ map_or_read_file (FileMapping *file_mapping)
         return TRUE;
 
     if (file_mapping->fd < 0)
-        file_mapping->fd = open_file (file_mapping);
+        file_mapping->fd = open_file (file_mapping, NULL);
 
     /* If the data arrived over a pipe and was reasonably small, open_file () will
      * populate the data fields instead of the fd. */
@@ -455,6 +511,25 @@ file_mapping_destroy (FileMapping *file_mapping)
     g_free (file_mapping);
 }
 
+gboolean
+file_mapping_open_now (FileMapping *file_mapping, GError **error)
+{
+    if (file_mapping->data || file_mapping->fd >= 0)
+        return TRUE;
+
+    file_mapping->fd = open_file (file_mapping, error);
+    if (file_mapping->data || file_mapping->fd >= 0)
+        return TRUE;
+
+    if (error && !*error)
+    {
+        g_set_error (error, G_FILE_ERROR, G_FILE_ERROR_FAILED,
+                     "Open/map failed");
+    }
+
+    return FALSE;
+}
+
 const gchar *
 file_mapping_get_path (FileMapping *file_mapping)
 {
@@ -476,8 +551,19 @@ file_mapping_get_data (FileMapping *file_mapping, gsize *length_out)
 gboolean
 file_mapping_taste (FileMapping *file_mapping, gpointer out, goffset ofs, gsize length)
 {
-    if (file_mapping->fd < 0)
-        file_mapping->fd = open_file (file_mapping);
+    if (!ensure_open_file (file_mapping))
+        return FALSE;
+
+    if (file_mapping->data)
+    {
+        if (ofs + length <= file_mapping->length)
+        {
+            memcpy (out, ((const gchar *) file_mapping->data) + ofs, length);
+            return TRUE;
+        }
+
+        return FALSE;
+    }
 
     if (file_mapping->fd < 0)
         return FALSE;
@@ -492,11 +578,24 @@ file_mapping_taste (FileMapping *file_mapping, gpointer out, goffset ofs, gsize 
 }
 
 gssize
-file_mapping_read (FileMapping *file_mapping, gpointer out, goffset ofs, gssize length)
+file_mapping_read (FileMapping *file_mapping, gpointer out, goffset ofs, gsize length)
 {
-    if (file_mapping->fd < 0)
-        file_mapping->fd = open_file (file_mapping);
+    if (!ensure_open_file (file_mapping))
+        return FALSE;
 
+    if (file_mapping->data)
+    {
+        if (ofs <= (gssize) file_mapping->length)
+        {
+            gssize seg_len = MIN (length, file_mapping->length - ofs);
+            memcpy (out, ((const gchar *) file_mapping->data) + ofs, seg_len);
+            return seg_len;
+        }
+
+        return -1;
+    }
+
+    /* FIXME: Shouldn't happen */
     if (file_mapping->fd < 0)
         return -1;
 
@@ -509,7 +608,12 @@ file_mapping_read (FileMapping *file_mapping, gpointer out, goffset ofs, gssize 
 gboolean
 file_mapping_has_magic (FileMapping *file_mapping, goffset ofs, gconstpointer data, gsize length)
 {
-    gchar *buf;
+    gchar buf [MAGIC_LENGTH_MAX];
+
+    g_assert (length <= MAGIC_LENGTH_MAX);
+
+    if (!ensure_open_file (file_mapping))
+        return FALSE;
 
     if (file_mapping->data)
     {
@@ -520,16 +624,12 @@ file_mapping_has_magic (FileMapping *file_mapping, goffset ofs, gconstpointer da
         return FALSE;
     }
 
-    if (file_mapping->fd < 0)
-        file_mapping->fd = open_file (file_mapping);
-
+    /* FIXME: Shouldn't happen */
     if (file_mapping->fd < 0)
         return FALSE;
 
     if (lseek (file_mapping->fd, ofs, SEEK_SET) != ofs)
         return FALSE;
-
-    buf = alloca (length);
 
     if (safe_read (file_mapping->fd, buf, length) != length)
         return FALSE;

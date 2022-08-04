@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 
-/* Copyright (C) 2019-2021 Hans Petter Jansson
+/* Copyright (C) 2019-2022 Hans Petter Jansson
  *
  * This file is part of Chafa, a program that turns images into character art.
  *
@@ -201,7 +201,7 @@ measure_glyphs (FontLoader *loader, gint *width_out, gint *height_out, gint *bas
         slot = loader->ft_face->glyph;
 
         small_histogram_add (&x_adv_hist, slot->advance.x / 64 > 0
-                             ? slot->advance.x / 64 : slot->bitmap_left + slot->bitmap.width);
+                             ? slot->advance.x / 64 : slot->bitmap_left + (gint) slot->bitmap.width);
         small_histogram_add (&asc_hist, slot->bitmap_top);
         small_histogram_add (&desc_hist, (gint) slot->bitmap.rows - (gint) slot->bitmap_top);
     }

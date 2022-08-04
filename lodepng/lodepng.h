@@ -30,6 +30,10 @@ freely, subject to the following restrictions:
 
 extern const char* LODEPNG_VERSION_STRING;
 
+/*Hard upper limit on size of an uncompressed in-memory image buffer. The
+total memory consumption may be higher, e.g. during postProcessScanlines().*/
+#define LODEPNG_IMAGE_DATA_SIZE_MAX 0xffffffffU
+
 /*
 The following #defines are used to create code sections. They can be disabled
 to disable code sections, which can give faster compile time and smaller binary.
@@ -657,6 +661,10 @@ unsigned lodepng_convert(unsigned char* out, const unsigned char* in,
                          const LodePNGColorMode* mode_out, const LodePNGColorMode* mode_in,
                          unsigned w, unsigned h);
 
+unsigned lodepng_convert_rgb(unsigned* r_out, unsigned* g_out, unsigned* b_out,
+                             unsigned r_in, unsigned g_in, unsigned b_in,
+                             const LodePNGColorMode* mode_out, const LodePNGColorMode* mode_in);
+
 #ifdef LODEPNG_COMPILE_DECODER
 /*
 Settings for the decoder. This contains settings for the PNG and the Zlib
@@ -895,8 +903,10 @@ unsigned char lodepng_chunk_safetocopy(const unsigned char* chunk);
 unsigned char* lodepng_chunk_data(unsigned char* chunk);
 const unsigned char* lodepng_chunk_data_const(const unsigned char* chunk);
 
+#ifndef LODEPNG_NO_COMPILE_CRC
 /*returns 0 if the crc is correct, 1 if it's incorrect (0 for OK as usual!)*/
 unsigned lodepng_chunk_check_crc(const unsigned char* chunk);
+#endif
 
 /*generates the correct CRC from the data and puts it in the last 4 bytes of the chunk*/
 void lodepng_chunk_generate_crc(unsigned char* chunk);

@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 
-/* Copyright (C) 2018-2021 Hans Petter Jansson
+/* Copyright (C) 2018-2022 Hans Petter Jansson
  *
  * This file is part of Chafa, a program that turns images into character art.
  *
@@ -108,6 +108,7 @@ Glyph2;
  * @CHAFA_SYMBOL_TAG_LEGACY: Legacy computer symbols, including sextants, wedges and more.
  * @CHAFA_SYMBOL_TAG_SEXTANT: Sextant 2x3 mosaics.
  * @CHAFA_SYMBOL_TAG_WEDGE: Wedge shapes that align with sextants.
+ * @CHAFA_SYMBOL_TAG_LATIN: Latin and Latin-like symbols (superset of ASCII).
  * @CHAFA_SYMBOL_TAG_EXTRA: Symbols not in any other category.
  * @CHAFA_SYMBOL_TAG_BAD: Joint set of ugly and ambiguous characters. Always excluded unless specifically asked for.
  * @CHAFA_SYMBOL_TAG_ALL: Special value meaning all supported symbols.
@@ -981,6 +982,12 @@ chafa_symbol_map_deinit (ChafaSymbolMap *symbol_map)
     for (i = 0; i < symbol_map->n_symbols; i++)
         g_free (symbol_map->symbols [i].coverage);
 
+    for (i = 0; i < symbol_map->n_symbols2; i++)
+    {
+        g_free (symbol_map->symbols2 [i].sym [0].coverage);
+        g_free (symbol_map->symbols2 [i].sym [1].coverage);
+    }
+
     g_hash_table_destroy (symbol_map->glyphs);
     g_hash_table_destroy (symbol_map->glyphs2);
     g_array_free (symbol_map->selectors, TRUE);
@@ -1773,7 +1780,7 @@ chafa_symbol_map_get_glyph (ChafaSymbolMap *symbol_map,
             *pixels_out = g_malloc (CHAFA_SYMBOL_N_PIXELS * 4 * 2);
             bitmap_to_argb (glyph2->bitmap [0], *pixels_out,
                             CHAFA_SYMBOL_WIDTH_PIXELS * 4 * 2);
-            bitmap_to_argb (glyph2->bitmap [1], (*pixels_out) + CHAFA_SYMBOL_WIDTH_PIXELS * 4,
+            bitmap_to_argb (glyph2->bitmap [1], ((guint8 *) *pixels_out) + CHAFA_SYMBOL_WIDTH_PIXELS * 4,
                             CHAFA_SYMBOL_WIDTH_PIXELS * 4 * 2);
         }
 

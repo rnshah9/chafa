@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 
-/* Copyright (C) 2020-2021 Hans Petter Jansson
+/* Copyright (C) 2020-2022 Hans Petter Jansson
  *
  * This file is part of Chafa, a program that turns images into character art.
  *
@@ -241,32 +241,6 @@ emit_ansi_truecolor (PrintCtx *ctx, gchar *out, gint i, gint i_max)
 }
 
 G_GNUC_WARN_UNUSED_RESULT static gchar *
-handle_inverted_with_reuse (PrintCtx *ctx, gchar *out,
-                            guint32 fg, guint32 bg, gboolean inverted)
-{
-    /* In FG-only mode, we can't use inverse color or bold because the
-     * attribute reset would mess with the background color. */
-    if (ctx->canvas->config.fg_only_enabled)
-        return out;
-
-    if ((ctx->cur_inverted && !inverted)
-        || (ctx->cur_fg != CHAFA_PALETTE_INDEX_TRANSPARENT && fg == CHAFA_PALETTE_INDEX_TRANSPARENT)
-        || (ctx->cur_bg != CHAFA_PALETTE_INDEX_TRANSPARENT && bg == CHAFA_PALETTE_INDEX_TRANSPARENT))
-    {
-        out = flush_chars (ctx, out);
-        out = reset_attributes (ctx, out);
-    }
-
-    if (!ctx->cur_inverted && inverted)
-    {
-        out = flush_chars (ctx, out);
-        out = chafa_term_info_emit_invert_colors (ctx->term_info, out);
-    }
-
-    return out;
-}
-
-G_GNUC_WARN_UNUSED_RESULT static gchar *
 handle_attrs_with_reuse (PrintCtx *ctx, gchar *out,
                          guint32 fg, guint32 bg,
                          gboolean inverted, gboolean bold)
@@ -294,7 +268,7 @@ handle_attrs_with_reuse (PrintCtx *ctx, gchar *out,
     if (!ctx->cur_bold && bold)
     {
         out = flush_chars (ctx, out);
-        out = chafa_term_info_emit_bold (ctx->term_info, out);
+        out = chafa_term_info_emit_enable_bold (ctx->term_info, out);
     }
 
     return out;
@@ -306,7 +280,7 @@ emit_attributes_256 (PrintCtx *ctx, gchar *out,
 {
     if (ctx->canvas->config.optimizations & CHAFA_OPTIMIZATION_REUSE_ATTRIBUTES)
     {
-        out = handle_inverted_with_reuse (ctx, out, fg, bg, inverted);
+        out = handle_attrs_with_reuse (ctx, out, fg, bg, inverted, FALSE);
 
         if (fg != ctx->cur_fg)
         {
@@ -398,7 +372,7 @@ emit_attributes_16 (PrintCtx *ctx, gchar *out,
 {
     if (ctx->canvas->config.optimizations & CHAFA_OPTIMIZATION_REUSE_ATTRIBUTES)
     {
-        out = handle_inverted_with_reuse (ctx, out, fg, bg, inverted);
+        out = handle_attrs_with_reuse (ctx, out, fg, bg, inverted, FALSE);
 
         if (fg != ctx->cur_fg)
         {
@@ -486,7 +460,7 @@ emit_ansi_16 (PrintCtx *ctx, gchar *out, gint i, gint i_max)
 }
 
 G_GNUC_WARN_UNUSED_RESULT static gchar *
-emit_attributes_16fg_8bg (PrintCtx *ctx, gchar *out,
+emit_attributes_16_8 (PrintCtx *ctx, gchar *out,
                           guint32 fg, guint32 bg, gboolean inverted)
 {
     if (ctx->canvas->config.optimizations & CHAFA_OPTIMIZATION_REUSE_ATTRIBUTES)
@@ -519,7 +493,7 @@ emit_attributes_16fg_8bg (PrintCtx *ctx, gchar *out,
         if (inverted)
             out = chafa_term_info_emit_invert_colors (ctx->term_info, out);
         if (fg > 7)
-            out = chafa_term_info_emit_bold (ctx->term_info, out);
+            out = chafa_term_info_emit_enable_bold (ctx->term_info, out);
 
         if (fg != CHAFA_PALETTE_INDEX_TRANSPARENT)
         {
@@ -547,7 +521,7 @@ emit_attributes_16fg_8bg (PrintCtx *ctx, gchar *out,
 
 /* Uses bold for bright FG colors. */
 G_GNUC_WARN_UNUSED_RESULT static gchar *
-emit_ansi_16fg_8bg (PrintCtx *ctx, gchar *out, gint i, gint i_max)
+emit_ansi_16_8 (PrintCtx *ctx, gchar *out, gint i, gint i_max)
 {
     for ( ; i < i_max; i++)
     {
@@ -562,9 +536,9 @@ emit_ansi_16fg_8bg (PrintCtx *ctx, gchar *out, gint i, gint i_max)
         bg = cell->bg_color;
 
         if (fg == CHAFA_PALETTE_INDEX_TRANSPARENT && bg != CHAFA_PALETTE_INDEX_TRANSPARENT)
-            out = emit_attributes_16fg_8bg (ctx, out, bg, fg, TRUE);
+            out = emit_attributes_16_8 (ctx, out, bg, fg, TRUE);
         else
-            out = emit_attributes_16fg_8bg (ctx, out, fg, bg, FALSE);
+            out = emit_attributes_16_8 (ctx, out, fg, bg, FALSE);
 
         if (fg == CHAFA_PALETTE_INDEX_TRANSPARENT && bg == CHAFA_PALETTE_INDEX_TRANSPARENT)
         {
@@ -727,8 +701,8 @@ build_ansi_gstring (ChafaCanvas *canvas, ChafaTermInfo *ti)
             case CHAFA_CANVAS_MODE_INDEXED_16:
                 out = emit_ansi_16 (&ctx, out, i, i_next);
                 break;
-            case CHAFA_CANVAS_MODE_INDEXED_16FG_8BG:
-                out = emit_ansi_16fg_8bg (&ctx, out, i, i_next);
+            case CHAFA_CANVAS_MODE_INDEXED_16_8:
+                out = emit_ansi_16_8 (&ctx, out, i, i_next);
                 break;
             case CHAFA_CANVAS_MODE_INDEXED_8:
                 out = emit_ansi_16 (&ctx, out, i, i_next);

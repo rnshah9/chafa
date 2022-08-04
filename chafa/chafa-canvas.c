@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 
-/* Copyright (C) 2018-2021 Hans Petter Jansson
+/* Copyright (C) 2018-2022 Hans Petter Jansson
  *
  * This file is part of Chafa, a program that turns images into character art.
  *
@@ -662,7 +662,7 @@ apply_fill (ChafaCanvas *canvas, const ChafaWorkCell *wcell, ChafaCanvasCell *ce
         chafa_palette_lookup_nearest (&canvas->fg_palette, canvas->config.color_space,
                                       &mean, &ccand);
     }
-    else if (canvas->config.canvas_mode == CHAFA_CANVAS_MODE_INDEXED_16FG_8BG)
+    else if (canvas->config.canvas_mode == CHAFA_CANVAS_MODE_INDEXED_16_8)
     {
         ChafaColorCandidates ccand_bg;
 
@@ -719,14 +719,14 @@ apply_fill (ChafaCanvas *canvas, const ChafaWorkCell *wcell, ChafaCanvasCell *ce
     }
 
     chafa_symbol_map_find_fill_candidates (&canvas->config.fill_symbol_map, best_i,
-                                           canvas->consider_inverted && canvas->config.canvas_mode != CHAFA_CANVAS_MODE_INDEXED_16FG_8BG,
+                                           canvas->consider_inverted && canvas->config.canvas_mode != CHAFA_CANVAS_MODE_INDEXED_16_8,
                                            &sym_cand, &n_sym_cands);
 
     /* If we end up with a featureless symbol (space or fill), make
      * FG color equal to BG. Don't do this in FGBG mode, as it does not permit
      * color manipulation. */
     if (canvas->config.canvas_mode != CHAFA_CANVAS_MODE_FGBG
-        && canvas->config.canvas_mode != CHAFA_CANVAS_MODE_INDEXED_16FG_8BG)
+        && canvas->config.canvas_mode != CHAFA_CANVAS_MODE_INDEXED_16_8)
     {
         if (best_i == 0)
             ccand.index [1] = ccand.index [0];
@@ -792,6 +792,37 @@ quantize_colors_for_cell_16_8 (ChafaCanvas *canvas, ChafaCanvasCell *cell,
     }
 }
 
+static void
+update_cell_colors (ChafaCanvas *canvas, ChafaCanvasCell *cell_out,
+                    const ChafaColorPair *color_pair)
+{
+    if (canvas->config.canvas_mode == CHAFA_CANVAS_MODE_INDEXED_256
+        || canvas->config.canvas_mode == CHAFA_CANVAS_MODE_INDEXED_240
+        || canvas->config.canvas_mode == CHAFA_CANVAS_MODE_INDEXED_16
+        || canvas->config.canvas_mode == CHAFA_CANVAS_MODE_INDEXED_8
+        || canvas->config.canvas_mode == CHAFA_CANVAS_MODE_FGBG_BGFG)
+    {
+        cell_out->fg_color =
+            chafa_palette_lookup_nearest (&canvas->fg_palette, canvas->config.color_space,
+                                          &color_pair->colors [CHAFA_COLOR_PAIR_FG], NULL);
+        cell_out->bg_color =
+            chafa_palette_lookup_nearest (&canvas->bg_palette, canvas->config.color_space,
+                                          &color_pair->colors [CHAFA_COLOR_PAIR_BG], NULL);
+    }
+    else if (canvas->config.canvas_mode == CHAFA_CANVAS_MODE_INDEXED_16_8)
+    {
+        quantize_colors_for_cell_16_8 (canvas, cell_out, color_pair);
+    }
+    else
+    {
+        cell_out->fg_color = chafa_pack_color (&color_pair->colors [CHAFA_COLOR_PAIR_FG]);
+        cell_out->bg_color = chafa_pack_color (&color_pair->colors [CHAFA_COLOR_PAIR_BG]);
+    }
+
+    if (canvas->config.fg_only_enabled)
+        cell_out->bg_color = transparent_cell_color (canvas->config.canvas_mode);
+}
+
 static gint
 update_cell (ChafaCanvas *canvas, ChafaWorkCell *work_cell, ChafaCanvasCell *cell_out)
 {
@@ -808,32 +839,7 @@ update_cell (ChafaCanvas *canvas, ChafaWorkCell *work_cell, ChafaCanvasCell *cel
         pick_symbol_and_colors_fast (canvas, work_cell, &sym, &color_pair, &sym_error);
 
     cell_out->c = sym;
-
-    if (canvas->config.canvas_mode == CHAFA_CANVAS_MODE_INDEXED_256
-        || canvas->config.canvas_mode == CHAFA_CANVAS_MODE_INDEXED_240
-        || canvas->config.canvas_mode == CHAFA_CANVAS_MODE_INDEXED_16
-        || canvas->config.canvas_mode == CHAFA_CANVAS_MODE_INDEXED_8
-        || canvas->config.canvas_mode == CHAFA_CANVAS_MODE_FGBG_BGFG)
-    {
-        cell_out->fg_color =
-            chafa_palette_lookup_nearest (&canvas->fg_palette, canvas->config.color_space,
-                                          &color_pair.colors [CHAFA_COLOR_PAIR_FG], NULL);
-        cell_out->bg_color =
-            chafa_palette_lookup_nearest (&canvas->bg_palette, canvas->config.color_space,
-                                          &color_pair.colors [CHAFA_COLOR_PAIR_BG], NULL);
-    }
-    else if (canvas->config.canvas_mode == CHAFA_CANVAS_MODE_INDEXED_16FG_8BG)
-    {
-        quantize_colors_for_cell_16_8 (canvas, cell_out, &color_pair);
-    }
-    else
-    {
-        cell_out->fg_color = chafa_pack_color (&color_pair.colors [CHAFA_COLOR_PAIR_FG]);
-        cell_out->bg_color = chafa_pack_color (&color_pair.colors [CHAFA_COLOR_PAIR_BG]);
-    }
-
-    if (canvas->config.fg_only_enabled)
-        cell_out->bg_color = transparent_cell_color (canvas->config.canvas_mode);
+    update_cell_colors (canvas, cell_out, &color_pair);
 
     /* FIXME: It would probably be better to do the fgbg/bgfg blank symbol check
      * from emit_ansi_fgbg_bgfg() here. */
@@ -865,39 +871,14 @@ update_cells_wide (ChafaCanvas *canvas, ChafaWorkCell *work_cell_a, ChafaWorkCel
 
     cell_a_out->c = sym;
     cell_b_out->c = 0;
+    update_cell_colors (canvas, cell_a_out, &color_pair);
+    cell_b_out->fg_color = cell_a_out->fg_color;
+    cell_b_out->bg_color = cell_a_out->bg_color;
 
-    if (canvas->config.canvas_mode == CHAFA_CANVAS_MODE_INDEXED_256
-        || canvas->config.canvas_mode == CHAFA_CANVAS_MODE_INDEXED_240
-        || canvas->config.canvas_mode == CHAFA_CANVAS_MODE_INDEXED_16
-        || canvas->config.canvas_mode == CHAFA_CANVAS_MODE_INDEXED_8
-        || canvas->config.canvas_mode == CHAFA_CANVAS_MODE_FGBG_BGFG)
-    {
-        cell_a_out->fg_color = cell_b_out->fg_color =
-            chafa_palette_lookup_nearest (&canvas->fg_palette, canvas->config.color_space,
-                                          &color_pair.colors [CHAFA_COLOR_PAIR_FG], NULL);
-        cell_a_out->bg_color = cell_b_out->bg_color =
-            chafa_palette_lookup_nearest (&canvas->bg_palette, canvas->config.color_space,
-                                          &color_pair.colors [CHAFA_COLOR_PAIR_BG], NULL);
-    }
-    else if (canvas->config.canvas_mode == CHAFA_CANVAS_MODE_INDEXED_16FG_8BG)
-    {
-        quantize_colors_for_cell_16_8 (canvas, cell_a_out, &color_pair);
-        cell_b_out->fg_color = cell_a_out->fg_color;
-        cell_b_out->bg_color = cell_a_out->bg_color;
-
-        /* quantize_colors_for_cell_16_8() can revert the char to solid, and
-         * the solid char is always narrow. Extend it to both cells. */
-        if (cell_a_out->c == canvas->solid_char)
-            cell_b_out->c = cell_a_out->c;
-    }
-    else
-    {
-        cell_a_out->fg_color = cell_b_out->fg_color = chafa_pack_color (&color_pair.colors [CHAFA_COLOR_PAIR_FG]);
-        cell_a_out->bg_color = cell_b_out->bg_color = chafa_pack_color (&color_pair.colors [CHAFA_COLOR_PAIR_BG]);
-    }
-
-    if (canvas->config.fg_only_enabled)
-        cell_a_out->bg_color = cell_b_out->bg_color = transparent_cell_color (canvas->config.canvas_mode);
+    /* quantize_colors_for_cell_16_8() can revert the char to solid, and
+     * the solid char is always narrow. Extend it to both cells. */
+    if (cell_a_out->c == canvas->solid_char)
+        cell_b_out->c = cell_a_out->c;
 }
 
 /* Number of entries in our cell ring buffer. This allows us to do lookback
@@ -1138,7 +1119,7 @@ setup_palette (ChafaCanvas *canvas)
             bg_pal_type = CHAFA_PALETTE_TYPE_FIXED_16;
             break;
 
-        case CHAFA_CANVAS_MODE_INDEXED_16FG_8BG:
+        case CHAFA_CANVAS_MODE_INDEXED_16_8:
             fg_pal_type = CHAFA_PALETTE_TYPE_FIXED_16;
             bg_pal_type = CHAFA_PALETTE_TYPE_FIXED_8;
             break;
@@ -1325,7 +1306,7 @@ chafa_canvas_new (const ChafaCanvasConfig *config)
         canvas->config.fg_only_enabled = TRUE;
 
     canvas->use_quantized_error =
-        (canvas->config.canvas_mode == CHAFA_CANVAS_MODE_INDEXED_16FG_8BG
+        (canvas->config.canvas_mode == CHAFA_CANVAS_MODE_INDEXED_16_8
          && !canvas->config.fg_only_enabled);
 
     chafa_symbol_map_prepare (&canvas->config.symbol_map);
@@ -1360,7 +1341,7 @@ chafa_canvas_new (const ChafaCanvasConfig *config)
                 dither_intensity = DITHER_BASE_INTENSITY_256C;
                 break;
             case CHAFA_CANVAS_MODE_INDEXED_16:
-            case CHAFA_CANVAS_MODE_INDEXED_16FG_8BG:
+            case CHAFA_CANVAS_MODE_INDEXED_16_8:
                 dither_intensity = DITHER_BASE_INTENSITY_16C;
                 break;
             case CHAFA_CANVAS_MODE_INDEXED_8:
@@ -1861,7 +1842,7 @@ chafa_canvas_get_colors_at (ChafaCanvas *canvas, gint x, gint y,
         case CHAFA_CANVAS_MODE_INDEXED_256:
         case CHAFA_CANVAS_MODE_INDEXED_240:
         case CHAFA_CANVAS_MODE_INDEXED_16:
-        case CHAFA_CANVAS_MODE_INDEXED_16FG_8BG:
+        case CHAFA_CANVAS_MODE_INDEXED_16_8:
         case CHAFA_CANVAS_MODE_INDEXED_8:
         case CHAFA_CANVAS_MODE_FGBG_BGFG:
         case CHAFA_CANVAS_MODE_FGBG:
@@ -1930,7 +1911,7 @@ chafa_canvas_set_colors_at (ChafaCanvas *canvas, gint x, gint y,
         case CHAFA_CANVAS_MODE_INDEXED_256:
         case CHAFA_CANVAS_MODE_INDEXED_240:
         case CHAFA_CANVAS_MODE_INDEXED_16:
-        case CHAFA_CANVAS_MODE_INDEXED_16FG_8BG:
+        case CHAFA_CANVAS_MODE_INDEXED_16_8:
         case CHAFA_CANVAS_MODE_INDEXED_8:
             cell->fg_color = packed_rgb_to_index (&canvas->fg_palette, canvas->config.color_space, fg);
             cell->bg_color = packed_rgb_to_index (&canvas->bg_palette, canvas->config.color_space, bg);
@@ -2005,7 +1986,7 @@ chafa_canvas_get_raw_colors_at (ChafaCanvas *canvas, gint x, gint y,
         case CHAFA_CANVAS_MODE_INDEXED_256:
         case CHAFA_CANVAS_MODE_INDEXED_240:
         case CHAFA_CANVAS_MODE_INDEXED_16:
-        case CHAFA_CANVAS_MODE_INDEXED_16FG_8BG:
+        case CHAFA_CANVAS_MODE_INDEXED_16_8:
         case CHAFA_CANVAS_MODE_INDEXED_8:
             fg = cell->fg_color < 256 ? (gint) cell->fg_color : -1;
             bg = cell->bg_color < 256 ? (gint) cell->bg_color : -1;
@@ -2071,7 +2052,7 @@ chafa_canvas_set_raw_colors_at (ChafaCanvas *canvas, gint x, gint y,
         case CHAFA_CANVAS_MODE_INDEXED_256:
         case CHAFA_CANVAS_MODE_INDEXED_240:
         case CHAFA_CANVAS_MODE_INDEXED_16:
-        case CHAFA_CANVAS_MODE_INDEXED_16FG_8BG:
+        case CHAFA_CANVAS_MODE_INDEXED_16_8:
         case CHAFA_CANVAS_MODE_INDEXED_8:
             cell->fg_color = fg >= 0 ? fg : CHAFA_PALETTE_INDEX_TRANSPARENT;
             cell->bg_color = bg >= 0 ? bg : CHAFA_PALETTE_INDEX_TRANSPARENT;

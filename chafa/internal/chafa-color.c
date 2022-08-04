@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 
-/* Copyright (C) 2018-2021 Hans Petter Jansson
+/* Copyright (C) 2018-2022 Hans Petter Jansson
  *
  * This file is part of Chafa, a program that turns images into character art.
  *
@@ -24,16 +24,14 @@
 #include "chafa.h"
 #include "internal/chafa-color.h"
 
-#define DEBUG(x)
-
 guint32
 chafa_pack_color (const ChafaColor *color)
 {
     /* Assumes each channel 0 <= value <= 255 */
-    return (color->ch [0] << 16)
-            | (color->ch [1] << 8)
-            | (color->ch [2])
-            | (color->ch [3] << 24);  /* Alpha */
+    return ((guint32) color->ch [0] << 16)
+            | ((guint32) color->ch [1] << 8)
+            | ((guint32) color->ch [2])
+            | ((guint32) color->ch [3] << 24);  /* Alpha */
 }
 
 void

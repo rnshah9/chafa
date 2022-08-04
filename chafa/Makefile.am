@@ -9,7 +9,7 @@ noinst_LTLIBRARIES =
 noinst_HEADERS =
 
 libchafa_la_CFLAGS = $(LIBCHAFA_CFLAGS) $(GLIB_CFLAGS) -DCHAFA_COMPILATION
-libchafa_la_LDFLAGS = $(LIBCHAFA_LDFLAGS) -version-info 7:1:7
+libchafa_la_LDFLAGS = $(LIBCHAFA_LDFLAGS) -no-undefined -version-info 8:3:8
 libchafa_la_LIBADD = $(GLIB_LIBS) internal/libchafa-internal.la -lm
 
 libchafa_la_SOURCES = \
@@ -62,7 +62,7 @@ chafaconfig-stamp: ../config.status
 	  $(SHELL) ./config.status chafa/chafaconfig.h
 	@touch chafaconfig-stamp
 
-## -- General ---
+## --- General ---
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir)

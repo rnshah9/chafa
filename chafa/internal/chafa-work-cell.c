@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 
-/* Copyright (C) 2018-2021 Hans Petter Jansson
+/* Copyright (C) 2018-2022 Hans Petter Jansson
  *
  * This file is part of Chafa, a program that turns images into character art.
  *
@@ -26,14 +26,6 @@
 #include "internal/chafa-private.h"
 #include "internal/chafa-pixops.h"
 #include "internal/chafa-work-cell.h"
-
-/* Used for cell initialization. May be added up over multiple cells, so a
- * low multiple needs to fit in an integer. */
-#define SYMBOL_ERROR_MAX (G_MAXINT / 8)
-
-/* Max candidates to consider in pick_symbol_and_colors_fast(). This is also
- * limited by a similar constant in chafa-symbol-map.c */
-#define N_CANDIDATES_MAX 8
 
 typedef struct
 {

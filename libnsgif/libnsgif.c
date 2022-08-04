@@ -43,7 +43,7 @@
 #define GIF_TRANSPARENT_COLOUR 0x00
 
 /* GIF Flags */
-#define GIF_FRAME_COMBINE 1
+/* #define GIF_FRAME_COMBINE 1 */ /* Unused macro */
 #define GIF_FRAME_CLEAR 2
 #define GIF_FRAME_RESTORE 3
 #define GIF_FRAME_QUIRKS_RESTORE 4
@@ -57,7 +57,7 @@
 #define GIF_DISPOSAL_MASK 0x1c
 #define GIF_TRANSPARENCY_MASK 0x01
 #define GIF_EXTENSION_COMMENT 0xfe
-#define GIF_EXTENSION_PLAIN_TEXT 0x01
+/* #define GIF_EXTENSION_PLAIN_TEXT 0x01 */ /* Unused macro */
 #define GIF_EXTENSION_APPLICATION 0xff
 #define GIF_BLOCK_TERMINATOR 0x00
 #define GIF_TRAILER 0x3b
@@ -299,6 +299,9 @@ static gif_result gif_initialise_frame(gif_animation *gif)
                 }
                 gif->frames = temp_buf;
                 gif->frame_holders = frame + 1;
+
+                /* Clear all frame fields */
+                memset(&gif->frames[frame], 0, sizeof(gif_frame));
         }
 
         /* Store our frame pointer. We would do it when allocating except we
@@ -1067,6 +1070,9 @@ gif_result gif_initialise(gif_animation *gif, size_t size, unsigned char *data)
                         return GIF_INSUFFICIENT_MEMORY;
                 }
                 gif->frame_holders = 1;
+
+                /* Clear all frame fields */
+                memset(gif->frames, 0, sizeof(gif_frame));
 
                 /* Initialise the bitmap header */
                 assert(gif->bitmap_callbacks.bitmap_create);
