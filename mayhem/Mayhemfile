@@ -1,7 +1,6 @@
 project: chafa
-target: chafa
-testsuite: 
-  - file://test.png
+target: fuzz-chafa-calc-canvas-geometry
 
 cmds:
-  - cmd: /install/bin/chafa @@
+  - cmd: /fuzz_chafa_calc_canvas_geometry
+    libfuzzer: true
