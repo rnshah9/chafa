@@ -9,7 +9,7 @@ RUN autoreconf -if
 RUN ./configure --prefix=/install
 RUN make -j8
 RUN make install
-RUN clang++ mayhem/harness.cpp -fsanitize=fuzzer,address -L/install/lib -I/install/include/chafa -I/install/lib/chafa/include `pkg-config --libs --cflags glib-2.0` -lchafa -o /fuzz
+RUN clang++ mayhem/fuzz_chafa_calc_canvas_geometry.cpp -fsanitize=fuzzer,address -L/install/lib -I/install/include/chafa -I/install/lib/chafa/include `pkg-config --libs --cflags glib-2.0` -lchafa -o /fuzz
 
 FROM ubuntu:22.04 as package
 RUN apt-get update
