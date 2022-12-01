@@ -1,0 +1,7 @@
+project: chafa
+target: chafa
+testsuite: 
+  - file://test.png
+
+cmds:
+  - cmd: /install/bin/chafa @@
