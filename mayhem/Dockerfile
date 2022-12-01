@@ -15,5 +15,5 @@ FROM ubuntu:22.04 as package
 RUN apt-get update
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y libglib2.0-dev libfreetype6-dev
 COPY --from=builder /fuzz /fuzz_chafa_calc_canvas_geometry
-COPY --from=builder /install/lib /install/lib
+COPY --from=builder /install /install
 ENV LD_LIBRARY_PATH=/install/lib
